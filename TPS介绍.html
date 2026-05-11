@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TokenPlanServer — 能力现状与迭代方向</title>
+<style>
+:root{--primary:#1677ff;--primary-light:#e6f4ff;--success:#52c41a;--warning:#faad14;--danger:#ff4d4f;--text:#1d2129;--text-secondary:#4e5969;--text-tertiary:#86909c;--bg:#f7f8fa;--card-bg:#fff;--border:#e5e6eb;--g1:#1677ff;--g2:#722ed1}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--text);line-height:1.7}
+.hero{background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;padding:72px 40px;text-align:center;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle,rgba(255,255,255,.05) 0%,transparent 60%);animation:pulse 8s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+.hero h1{font-size:40px;font-weight:700;margin-bottom:12px;position:relative;letter-spacing:1px}
+.hero .subtitle{font-size:17px;opacity:.9;max-width:720px;margin:0 auto;position:relative}
+.hero .badge-row{margin-top:28px;display:flex;justify-content:center;gap:10px;flex-wrap:wrap;position:relative}
+.hero .badge{background:rgba(255,255,255,.15);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.25);padding:6px 18px;border-radius:20px;font-size:13px;font-weight:500}
+.container{max-width:1200px;margin:0 auto;padding:0 24px}
+.section{padding:56px 0}
+.section-title{font-size:26px;font-weight:700;text-align:center;margin-bottom:10px}
+.section-desc{text-align:center;color:var(--text-secondary);font-size:14px;margin-bottom:40px;max-width:680px;margin-left:auto;margin-right:auto}
+.tab-nav{display:flex;justify-content:center;gap:0;margin-bottom:40px;border-bottom:2px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:10}
+.tab-btn{padding:14px 36px;font-size:15px;font-weight:600;color:var(--text-secondary);cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .2s}
+.tab-btn:hover{color:var(--primary)}
+.tab-btn.active{color:var(--primary);border-bottom-color:var(--primary)}
+.tab-content{display:none}
+.tab-content.active{display:block;animation:fadeIn .3s}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.cap-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px}
+.cap-card{background:var(--card-bg);border-radius:12px;padding:24px;box-shadow:0 2px 10px rgba(0,0,0,.04);border:1px solid var(--border);transition:all .2s;display:flex;flex-direction:column;position:relative}
+.cap-card:hover{transform:translateY(-3px);box-shadow:0 8px 20px rgba(0,0,0,.08)}
+.cap-icon{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:12px}
+.cap-card h3{font-size:16px;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cap-card .status-tag{font-size:11px;padding:2px 8px;border-radius:8px;font-weight:500;white-space:nowrap}
+.cap-card .status-tag.live{background:#f6ffed;color:var(--success)}
+.cap-card .status-tag.planned{background:#fffbe6;color:var(--warning)}
+.cap-card p{color:var(--text-secondary);font-size:13px;line-height:1.75;flex:1}
+.cap-card .scope{margin-top:10px;padding:8px 10px;background:#fafbfc;border-radius:6px;font-size:12px;color:var(--text-tertiary);border-left:2px solid var(--border);line-height:1.7}
+.cap-card .scope strong{color:var(--text-secondary);font-weight:600}
+.expand-btn{margin-top:14px;padding:8px 14px;background:var(--primary-light);border:1px solid transparent;border-radius:6px;color:var(--primary);font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;align-self:flex-start;transition:all .2s}
+.expand-btn:hover{background:var(--primary);color:#fff;transform:translateX(2px)}
+.expand-btn .arrow{transition:transform .2s}
+.expand-btn:hover .arrow{transform:translateX(2px)}
+.modal-overlay{position:fixed;inset:0;background:rgba(29,33,41,.5);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:100;padding:24px;animation:fadeIn .2s}
+.modal-overlay.active{display:flex}
+.modal-box{background:#fff;border-radius:14px;max-width:680px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);animation:modalIn .25s}
+@keyframes modalIn{from{opacity:0;transform:scale(.95) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.modal-header{padding:22px 26px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;background:#fff;z-index:1}
+.modal-header h3{font-size:18px;font-weight:600;display:flex;align-items:center;gap:10px}
+.modal-header .modal-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;flex-shrink:0}
+.modal-close{width:30px;height:30px;border:none;background:#f7f8fa;border-radius:6px;cursor:pointer;font-size:18px;color:var(--text-secondary);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
+.modal-close:hover{background:#fff1f0;color:var(--danger)}
+.modal-body{padding:20px 26px 26px}
+.modal-body .intro{font-size:13px;color:var(--text-tertiary);margin-bottom:16px;padding:10px 12px;background:#fafbfc;border-radius:6px;border-left:3px solid var(--primary);line-height:1.75}
+.modal-body h4{font-size:12px;font-weight:700;color:var(--primary);letter-spacing:.5px;text-transform:uppercase;margin-bottom:10px}
+.modal-body ul{list-style:none;padding:0}
+.modal-body li{padding:12px 14px;background:#fafbfc;border-radius:8px;margin-bottom:8px;font-size:13px;line-height:1.8;color:var(--text-secondary);border-left:3px solid var(--primary)}
+.modal-body li strong{color:var(--text);font-weight:600;display:block;margin-bottom:2px}
+.modal-body .no-plan{padding:16px 18px;background:#fffbe6;border-radius:8px;font-size:13px;color:#8c6e00;line-height:1.85;border-left:3px solid var(--warning)}
+.arch-section{background:var(--card-bg);border-radius:12px;padding:28px;box-shadow:0 2px 10px rgba(0,0,0,.04);margin-bottom:20px;border:1px solid var(--border)}
+.arch-section h3{font-size:17px;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.arch-section h3 .num{display:inline-flex;width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+.arch-section .arch-subtitle{font-size:13px;color:var(--text-tertiary);margin-bottom:16px}
+.arch-features{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:14px}
+.arch-feature{display:flex;align-items:flex-start;gap:8px;font-size:13px;color:var(--text-secondary);padding:8px 12px;background:#fafbfc;border-radius:6px;border-left:3px solid var(--primary)}
+.arch-feature strong{color:var(--text);font-weight:600}
+.metrics-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:32px}
+.metric-card{background:var(--card-bg);border-radius:10px;padding:20px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.04);border:1px solid var(--border)}
+.metric-value{font-size:30px;font-weight:700;background:linear-gradient(135deg,var(--g1),var(--g2));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:2px}
+.metric-label{font-size:12px;color:var(--text-tertiary)}
+.footer{text-align:center;padding:32px;color:var(--text-tertiary);font-size:12px;border-top:1px solid var(--border);margin-top:32px}
+@media(max-width:768px){.hero{padding:48px 20px}.hero h1{font-size:28px}.cap-grid{grid-template-columns:1fr}.metrics-row{grid-template-columns:repeat(2,1fr)}.tab-btn{padding:10px 18px;font-size:14px}.modal-box{max-height:90vh}.modal-header,.modal-body{padding-left:18px;padding-right:18px}}
+</style>
+</head>
+<body>
+
+<section class="hero">
+<h1>TokenPlanServer</h1>
+<p class="subtitle">大语言模型智能代理网关<br>为 AI 应用提供统一接入、安全管控、智能路由与高可用保障</p>
+<div class="badge-row">
+<span class="badge">🔀 智能路由</span>
+<span class="badge">🛡️ 安全过滤</span>
+<span class="badge">🧠 知识注入</span>
+<span class="badge">📊 用量管控</span>
+<span class="badge">⚡ 高可用</span>
+<span class="badge">🔄 跨协议</span>
+</div>
+</section>
+
+<div class="container">
+<div class="tab-nav">
+<button class="tab-btn active" onclick="switchTab(event,'features')">能力全景</button>
+<button class="tab-btn" onclick="switchTab(event,'arch')">技术架构</button>
+</div>
+</div>
+
+
+<!-- Tab 1: 能力全景 -->
+<div id="tab-features" class="tab-content active">
+<section class="section">
+<div class="container">
+
+<div class="metrics-row">
+<div class="metric-card"><div class="metric-value">11</div><div class="metric-label">核心能力</div></div>
+<div class="metric-card"><div class="metric-value">2</div><div class="metric-label">协议支持</div></div>
+<div class="metric-card"><div class="metric-value">14</div><div class="metric-label">管理功能页</div></div>
+<div class="metric-card"><div class="metric-value">3000</div><div class="metric-label">已验证并发<br><span style="font-size:10px;color:var(--text-tertiary)">4C4G×4 · 100KB入参 · 30s SSE</span></div></div>
+</div>
+
+<h2 class="section-title">能力全景</h2>
+<p class="section-desc">围绕"安全、稳定、可观测、可运营"四个目标，网关已覆盖企业 AI 使用的全链路需求。点击每张卡片的「迭代方向」查看该能力的规划演进。</p>
+
+<div class="cap-grid">
+
+<div class="cap-card">
+<div class="cap-icon" style="background:#e6f4ff">🔀</div>
+<h3>场景化智能路由 <span class="status-tag live">已上线</span></h3>
+<p>根据用户请求的意图自动选择最合适的模型，不再需要业务方手动指定模型名。简单任务走轻量模型，复杂任务走高端模型，在成本和效果间自动权衡。</p>
+<div class="scope"><strong>使用范围：</strong>当前主要服务编程场景的主力入口，覆盖代码生成、解释、调试等典型意图分类。</div>
+<button class="expand-btn" onclick="openModal('scene-route')">迭代方向 <span class="arrow">→</span></button>
+</div>
+
+<div class="cap-card">
+<div class="cap-icon" style="background:#f6ffed">🧠</div>
+<h3>Skill 知识注入 <span class="status-tag live">已上线</span></h3>
+<p>把公司、岗位、个人层面的业务知识预置到 Skill 库，用户提问时自动匹配最相关的内容注入到上下文，让通用模型开箱就有"业务背景"。</p>
+<div class="scope"><strong>使用范围：</strong>基于关键词与场景标签匹配，公司级、岗位级、个人级三层优先级叠加；每次最多注入 3 条，避免上下文臃肿。</div>
+<button class="expand-btn" onclick="openModal('skill')">迭代方向 <span class="arrow">→</span></button>
+</div>
+
+<div class="cap-card">
+<div class="cap-icon" style="background:#f9f0ff">🧬</div>
+<h3>记忆工程与 Skill 自进化 <span class="status-tag planned">规划中</span></h3>
+<p>网关是所有请求和响应的唯一穿透点，天然具备为每个用户沉淀长期记忆的条件。结合周期性反思与总结，把个人偏好、常见任务、解决套路自动提炼成新的 Skill，让 Skill 库从"人工维护"走向"自我进化"。</p>
+<div class="scope"><strong>规划范围：</strong>分层落地——基础记忆层（用户画像、偏好、术语）→ 反思层（会话归因、任务总结）→ 进化层（候选 Skill 自动生成、效果验证、晋级沉淀）。公司级 / 岗位级 / 个人级三层记忆分别管理、分别生效。</div>
+<button class="expand-btn" onclick="openModal('memory')">迭代方向 <span class="arrow">→</span></button>
+</div>
+
+<div class="cap-card">
+<div class="cap-icon" style="background:#fff0f6">�</div>
+<h3>请求缓存 <span class="status-tag planned">规划中</span></h3>
+<p>相同或近似的请求无需每次都打到大模型，命中缓存时直接返回历史响应。既降低成本，又显著提升响应速度，尤其适合事实型问答、结构化分类等重复度高的场景。</p>
+<div class="scope"><strong>规划范围：</strong>同时覆盖精准缓存（完全相同的请求）和语义缓存（含义相同的近似请求）两种形态，由业务场景自主选择启用粒度。</div>
+<button class="expand-btn" onclick="openModal('cache')">迭代方向 <span class="arrow">→</span></button>
+</div>
+
+<div class="cap-card">
+<div class="cap-icon" style="background:#f9f0ff">🎫</div>
+<h3>令牌与配额管控 <span class="status-tag live">已上线</span></h3>
+<p>每个用户或团队一把网关令牌绑定配额。运营侧可以做申请审批、批量分析、充值、回收、回收前预警。高并发下扣减绝不超发，扣减即时生效。</p>
+<div class="scope"><strong>使用范围：</strong>当前以 token 数作为配额单位，覆盖托管模型场景的完整计量链路；费用维度的实时核算与精准管控尚未纳入。</div>
+<button class="expand-btn" onclick="openModal('quota')">迭代方向 <span class="arrow">→</span></button>
+</div>
+
+<div class="cap-card">
+<div class="cap-icon" style="background:#e6fffb">⚡</div>
+<h3>多渠道高可用 <span class="status-tag live">已上线</span></h3>
+<p>同一模型背后可以挂多个上游渠道做负载均衡。异常渠道自动摘除、恢复后自动放量；主模型不可用时按预设链路切换到备选模型，业务层无感知。</p>
+<div class="scope"><strong>使用范围：</strong>支持加权轮询、最少连接两种策略；按模型能力（视觉、工具调用、思考链）自动匹配合适的渠道。</div>
+<button class="expand-btn" onclick="openModal('ha')">迭代方向 <span class="arrow">→</span></button>
+</div>
+
+<div class="cap-card">
+<div class="cap-icon" style="background:#fff7e6">🔄</div>
+<h3>跨协议转换 <span class="status-tag live">已上线</span></h3>
+<p>OpenAI 和 Anthropic 两套协议互通。客户端用任一协议接入，后端用任一协议响应，中间完整覆盖请求、非流式响应、流式响应三条路径。</p>
+<div class="scope"><strong>使用范围：</strong>覆盖两种协议常用的字段与交互模式；部分边缘特性（如引用链、压缩摘要等新增 block）仍在补齐。</div>
+<button class="expand-btn" onclick="openModal('protocol')">迭代方向 <span class="arrow">→</span></button>
+</div>
+
+<div class="cap-card">
+<div class="cap-icon" style="background:#e6f4ff">🔑</div>
+<h3>BYOK 自带 Key <span class="status-tag live">已上线</span></h3>
+<p>已有 LLM 厂商 API Key 的团队可以直接把网关作为代理，仍然享受 Skill 注入、敏感词过滤、审计能力，不占用网关自身的配额。</p>
+<div class="scope"><strong>使用范围：</strong>同时支持 OpenAI 和 Anthropic 入站；用户可自主开关是否启用 Skill 注入。</div>
+<button class="expand-btn" onclick="openModal('byok')">迭代方向 <span class="arrow">→</span></button>
+</div>
+
+<div class="cap-card">
+<div class="cap-icon" style="background:#f0f5ff">📊</div>
+<h3>全链路可观测 <span class="status-tag live">已上线</span></h3>
+<p>从请求进入到响应结束的每个关键节点都有打点。请求日志、用量分析、模型运维指标、审计日志一应俱全，排查问题不靠猜。</p>
+<div class="scope"><strong>使用范围：</strong>14 个管理页面覆盖日常运维全流程；指标接入 Prometheus 生态。</div>
+<button class="expand-btn" onclick="openModal('observability')">迭代方向 <span class="arrow">→</span></button>
+</div>
+
+<div class="cap-card">
+<div class="cap-icon" style="background:#e6fffb">🏢</div>
+<h3>渠道模式（多团队隔离） <span class="status-tag live">已上线</span></h3>
+<p>每个接入方可以拥有完全独立的上游供应商配置、路由策略和配额，不与其他团队共享资源池，适合多产品线、多部门各自管理 AI 能力的场景。</p>
+<div class="scope"><strong>使用范围：</strong>一个网关集群可同时服务多个独立运营的业务方，各自数据互不干扰。</div>
+<button class="expand-btn" onclick="openModal('tenant')">迭代方向 <span class="arrow">→</span></button>
+</div>
+
+<div class="cap-card">
+<div class="cap-icon" style="background:#fff1f0">�️</div>
+<h3>敏感词双向过滤 <span class="status-tag live">已上线</span></h3>
+<p>请求和响应两个方向都扫描，防止敏感信息流出、也防止不当内容流入。支持关键词库和正则规则，按词组分类管理，命中全程可追溯。</p>
+<div class="scope"><strong>使用范围：</strong>覆盖脱敏替换场景；总开关和入参、出参独立开关灵活组合。</div>
+<button class="expand-btn" onclick="openModal('sensitive')">迭代方向 <span class="arrow">→</span></button>
+</div>
+
+</div>
+
+</div>
+</section>
+</div>
+
+
+<!-- Tab 2: 技术架构 -->
+<div id="tab-arch" class="tab-content">
+<section class="section">
+<div class="container">
+<h2 class="section-title">技术架构</h2>
+<p class="section-desc">全响应式非阻塞框架、多级缓存、异步写库、无状态实例、全链路可观测五大支柱，支撑千级并发和毫秒级故障切换。</p>
+
+<div class="metrics-row" style="margin-bottom:48px">
+<div class="metric-card"><div class="metric-value">3000</div><div class="metric-label">单集群并发<br><span style="font-size:10px;color:var(--text-tertiary)">4C4G × 4 实例</span></div></div>
+<div class="metric-card"><div class="metric-value">&lt; 30ms</div><div class="metric-label">P99 网关开销<br><span style="font-size:10px;color:var(--text-tertiary)">不含 LLM 推理</span></div></div>
+<div class="metric-card"><div class="metric-value">99.99%</div><div class="metric-label">可用性目标<br><span style="font-size:10px;color:var(--text-tertiary)">多实例 + 降级链</span></div></div>
+<div class="metric-card"><div class="metric-value">0</div><div class="metric-label">热路径阻塞<br><span style="font-size:10px;color:var(--text-tertiary)">全异步非阻塞</span></div></div>
+<div class="metric-card"><div class="metric-value">μs 级</div><div class="metric-label">配置读取<br><span style="font-size:10px;color:var(--text-tertiary)">本地缓存</span></div></div>
+</div>
+
+<div class="arch-section">
+<h3><span class="num">1</span>全响应式网络层</h3>
+<div class="arch-subtitle">从客户端到上游 LLM 的请求与响应全程异步非阻塞</div>
+<div class="arch-features">
+<div class="arch-feature"><div><strong>全链路非阻塞</strong>：单实例可承载上千并发长连接，流式响应持续数十秒也不占用业务线程</div></div>
+<div class="arch-feature"><div><strong>过滤器即能力</strong>：鉴权、路由、Skill 注入、敏感词、计量、日志以过滤器形式串联，新增能力只需插入新过滤器，不改动核心流程</div></div>
+<div class="arch-feature"><div><strong>流式零拷贝</strong>：SSE 流式响应以原始字节直通客户端，降低延迟与 CPU 开销</div></div>
+<div class="arch-feature"><div><strong>优雅升级</strong>：Pod 滚动升级期间追踪存量请求，新请求先摘除、老请求自然完成</div></div>
+</div>
+</div>
+
+<div class="arch-section">
+<h3><span class="num">2</span>多级缓存架构</h3>
+<div class="arch-subtitle">本地缓存 + 分布式缓存 + 数据库三级联动</div>
+<div class="arch-features">
+<div class="arch-feature"><div><strong>分层回源</strong>：高频配置从本地内存读取（微秒级），未命中走分布式缓存（毫秒级），再未命中才回源数据库</div></div>
+<div class="arch-feature"><div><strong>跨实例同步</strong>：任一实例修改配置后通过消息总线广播，其他实例主动刷新，避免多实例数据漂移</div></div>
+<div class="arch-feature"><div><strong>启动预热</strong>：实例启动时批量加载全部配置到本地，首个请求即命中缓存</div></div>
+</div>
+</div>
+
+<div class="arch-section">
+<h3><span class="num">3</span>智能路由与负载均衡</h3>
+<div class="arch-subtitle">基于场景、能力、健康状态的多维度决策</div>
+<div class="arch-features">
+<div class="arch-feature"><div><strong>能力感知</strong>：自动识别请求所需能力，只在支持该能力的渠道间选择</div></div>
+<div class="arch-feature"><div><strong>多策略可选</strong>：加权轮询、最少连接等多种负载均衡策略按业务场景灵活切换</div></div>
+<div class="arch-feature"><div><strong>故障隔离</strong>：异常渠道自动熔断摘除，恢复后试探性放量验证</div></div>
+<div class="arch-feature"><div><strong>自动降级</strong>：主模型不可用时按预设链路切换到备选模型</div></div>
+</div>
+</div>
+
+<div class="arch-section">
+<h3><span class="num">4</span>异步写库 + 实时配额</h3>
+<div class="arch-subtitle">配额走强一致路径保证业务准确，日志走最终一致路径保证热路径零阻塞</div>
+<div class="arch-features">
+<div class="arch-feature"><div><strong>热路径零阻塞</strong>：请求响应阶段不依赖数据库写入，数据库抖动不会影响业务响应延迟</div></div>
+<div class="arch-feature"><div><strong>配额毫秒级一致</strong>：配额扣减走分布式原子操作，高并发下绝不超发</div></div>
+<div class="arch-feature"><div><strong>日志异步落库</strong>：请求日志走消息队列异步消费，幂等保证不重复不丢失</div></div>
+</div>
+</div>
+
+<div class="arch-section">
+<h3><span class="num">5</span>无状态实例 + 弹性伸缩</h3>
+<div class="arch-subtitle">所有状态下沉到共享存储层，实例可随流量自由伸缩</div>
+<div class="arch-features">
+<div class="arch-feature"><div><strong>无状态设计</strong>：实例本身不持久化任何业务数据，加减实例对业务完全透明</div></div>
+<div class="arch-feature"><div><strong>场景感知扩容</strong>：基于业务敏感的指标触发扩容，长连接流式场景下更灵敏</div></div>
+<div class="arch-feature"><div><strong>零停机升级</strong>：配合优雅关闭机制，滚动发布期间不丢流量不丢数据</div></div>
+</div>
+</div>
+
+<div class="arch-section">
+<h3><span class="num">6</span>故障检测与熔断</h3>
+<div class="arch-subtitle">主动探测 + 被动熔断 + 自动降级三重保障</div>
+<div class="arch-features">
+<div class="arch-feature"><div><strong>三态熔断</strong>：渠道失败率超阈值自动熔断，冷却期后试探性放量，恢复正常再完整放行</div></div>
+<div class="arch-feature"><div><strong>主动探测</strong>：定时发送真实请求验证端到端可用性，不是简单的网络探活</div></div>
+<div class="arch-feature"><div><strong>降级链路</strong>：多级降级配置，主模型挂了切备选，备选挂了切兜底</div></div>
+</div>
+</div>
+
+<div class="arch-section">
+<h3><span class="num">7</span>全链路可观测</h3>
+<div class="arch-subtitle">结构化日志 + 指标监控 + 运营看板三位一体</div>
+<div class="arch-features">
+<div class="arch-feature"><div><strong>请求追踪</strong>：每个请求有唯一 ID 串起全链路日志，每一跳都可追溯</div></div>
+<div class="arch-feature"><div><strong>决策可回溯</strong>：路由选择、熔断触发、敏感词命中等关键决策都有结构化日志</div></div>
+<div class="arch-feature"><div><strong>指标全覆盖</strong>：请求量、延迟、错误率、配额余额等核心指标实时采集</div></div>
+<div class="arch-feature"><div><strong>运营看板</strong>：多维度用量分析、模型运维指标、审计日志等运营工具齐备</div></div>
+</div>
+</div>
+
+<div class="arch-section" style="background:linear-gradient(135deg,#fff7e6,#fff1f0);border:none">
+<h3 style="color:#d46b08"><span class="num" style="background:linear-gradient(135deg,#fa8c16,#f5222d)">📊</span>生产级压测数据</h3>
+<div class="arch-subtitle" style="color:#8c8c8c">4C4G × 4 实例集群 · 100KB 入参 · 2700 tokens 输出 · 30 秒 SSE 流式响应</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:12px">
+<div style="background:#fff;border-radius:10px;padding:18px;text-align:center;border:2px solid #ffd591"><div style="font-size:28px;font-weight:700;color:#d46b08">3000</div><div style="font-size:12px;color:var(--text-tertiary);margin-top:2px">持续并发连接</div></div>
+<div style="background:#fff;border-radius:10px;padding:18px;text-align:center;border:2px solid #ffd591"><div style="font-size:28px;font-weight:700;color:#d46b08">750</div><div style="font-size:12px;color:var(--text-tertiary);margin-top:2px">单实例并发</div></div>
+<div style="background:#fff;border-radius:10px;padding:18px;text-align:center;border:2px solid #ffd591"><div style="font-size:28px;font-weight:700;color:#d46b08">100 QPS</div><div style="font-size:12px;color:var(--text-tertiary);margin-top:2px">新请求速率</div></div>
+<div style="background:#fff;border-radius:10px;padding:18px;text-align:center;border:2px solid #ffd591"><div style="font-size:28px;font-weight:700;color:#d46b08">0%</div><div style="font-size:12px;color:var(--text-tertiary);margin-top:2px">失败率</div></div>
+<div style="background:#fff;border-radius:10px;padding:18px;text-align:center;border:2px solid #ffd591"><div style="font-size:28px;font-weight:700;color:#d46b08">&lt; 30ms</div><div style="font-size:12px;color:var(--text-tertiary);margin-top:2px">网关 P99 开销</div></div>
+</div>
+<div style="background:#fff;border-radius:10px;padding:16px;margin-top:14px;font-size:13px;color:var(--text-secondary);line-height:1.9">
+<strong style="color:#d46b08">关键结论：</strong>仅 16C16G 总资源（4 实例 × 4C4G）下支撑 3000 并发长连接 SSE 流式请求，<strong>单位资源并发效率达 187 并发/核心</strong>，达到业界一流 AI 网关性能水平。
+</div>
+</div>
+
+<div class="arch-section" style="background:linear-gradient(135deg,#f0f5ff,#f9f0ff);border:none">
+<h3 style="color:var(--primary)"><span class="num">★</span>核心设计哲学 · 六大铁律</h3>
+<div class="arch-features" style="margin-top:8px">
+<div class="arch-feature" style="background:#fff"><div><strong>① 热路径零阻塞</strong>：所有同步 IO 下沉到异步队列，响应阶段永远不等数据库和消息队列</div></div>
+<div class="arch-feature" style="background:#fff"><div><strong>② 无状态实例</strong>：所有状态下沉到共享存储，单实例随时加减，滚动升级零停机</div></div>
+<div class="arch-feature" style="background:#fff"><div><strong>③ 分级缓存</strong>：本地微秒级 → 分布式毫秒级 → 数据库逐级回源，消息总线保证失效一致性</div></div>
+<div class="arch-feature" style="background:#fff"><div><strong>④ 故障快速恢复</strong>：熔断 + 健康检查 + 降级链，秒级摘除异常，渐进恢复避免雪崩</div></div>
+<div class="arch-feature" style="background:#fff"><div><strong>⑤ 观测优先</strong>：先有日志和指标再写功能，生产问题分钟级定位，而非小时级猜测</div></div>
+<div class="arch-feature" style="background:#fff"><div><strong>⑥ 一致性分级</strong>：配额强一致、日志最终一致，按业务特性选择</div></div>
+</div>
+</div>
+
+</div>
+</section>
+</div>
+
+</div>
+
+<footer class="footer">
+<p>TokenPlanServer · 大语言模型智能代理网关</p>
+<p style="margin-top:6px">技术栈：Java25 · Spring Boot 4 · WebFlux · OceanBase · Redis · RocketMQ · Vue 3</p>
+</footer>
+
+
+<div class="modal-overlay" id="modal-scene-route" onclick="closeModalOnBg(event)">
+<div class="modal-box">
+<div class="modal-header">
+<h3><span class="modal-icon">🔀</span>场景化智能路由 · 迭代方向</h3>
+<button class="modal-close" onclick="closeModal('scene-route')">×</button>
+</div>
+<div class="modal-body">
+<div class="intro">当前决策完全依赖单一小模型（微调的Qwen3.5 4B），每个请求都做一次推理。迭代围绕"降成本、提准确、扩覆盖、保兜底"四个方向展开。</div>
+<h4>主要演进路径</h4>
+<ul>
+<li><strong>智能决策能力（规则优先 + 小模型兜底）</strong>简单请求用规则库快速判定，复杂或规则无法覆盖的请求再交给小模型，整体推理次数显著下降，延迟也随之降低。</li>
+<li><strong>场景支持细分与独立配置</strong>从当前编程场景扩展到客服、写作、数据分析、内部办公等多场景，每个场景拥有独立的意图词表、模型映射和参数配置，互不影响。</li>
+<li><strong>决策质量评估体系</strong>为每次路由决策建立可回放、可评估的机制，运营侧能清楚看到判对判错的分布、模型切换后的效果对比，持续优化决策策略。</li>
+<li><strong>路由失败与高延迟兜底</strong>当决策过程本身失败（例如判别模型故障）或延迟超出阈值时，走预设的默认模型与默认路径兜底，保证请求不中断、用户无感知。</li>
+</ul>
+</div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-skill" onclick="closeModalOnBg(event)">
+<div class="modal-box">
+<div class="modal-header">
+<h3><span class="modal-icon">🧠</span>Skill 知识注入 · 迭代方向</h3>
+<button class="modal-close" onclick="closeModal('skill')">×</button>
+</div>
+<div class="modal-body">
+<div class="intro">当前基于关键词匹配，用户换个问法就可能召回不到；命中后也缺少"是否真帮上忙"的反馈，Skill 库的优化主要靠人工维护。</div>
+<h4>主要演进路径</h4>
+<ul>
+<li><strong>语义召回升级</strong>从关键词匹配升级到语义匹配，用户同义表达、不同问法都能准确命中对应 Skill，显著提升覆盖率。</li>
+<li><strong>效果闭环</strong>持续跟踪每条 Skill 注入后响应的质量信号（是否被采纳、是否追问类似问题等），低效 Skill 自动降权或下线。</li>
+<li><strong>Skill 协作与冲突仲裁</strong>多条 Skill 同时命中时进行合并、去重、优先级仲裁，避免内容互相打架导致输出质量下降。</li>
+<li><strong>自进化（Self-Evolving）</strong>结合记忆工程能力，自动从用户高频使用的提问与解法中提炼候选 Skill，经效果验证后晋级为正式 Skill；已有 Skill 按使用数据自动精修、合并、淘汰，从"人工维护"走向"自我进化"（详见"记忆工程与 Skill 自进化"卡片）。</li>
+</ul>
+</div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-sensitive" onclick="closeModalOnBg(event)">
+<div class="modal-box">
+<div class="modal-header">
+<h3><span class="modal-icon">🛡️</span>敏感词双向过滤 · 迭代方向</h3>
+<button class="modal-close" onclick="closeModal('sensitive')">×</button>
+</div>
+<div class="modal-body">
+<div class="intro">当前仅支持脱敏替换，对高危内容不能主动阻断；规则库扩大后扫描性能将成为瓶颈；不同业务对敏感度的要求也差异较大，需要分级管理。</div>
+<h4>主要演进路径</h4>
+<ul>
+<li><strong>严重度分级处置</strong>引入高危直接阻断、中危脱敏替换、低危仅记录不干预三档分级，关键请求可阻断并告警，不再只能事后发现。</li>
+<li><strong>规则库治理</strong>为每条规则自动统计命中率、误报率，长期未命中或误报率高的规则给出淘汰建议，避免规则库越维护越臃肿。</li>
+<li><strong>场景化规则集</strong>按业务域（金融、医疗、法务等）维护独立的规则库，不同团队启用不同规则集，兼顾合规严格性与业务灵活性。</li>
+<li><strong>规则库持续更新机制</strong>建立与外部合规词库的订阅与同步机制，新增的敏感内容能及时纳入防护范围。</li>
+</ul>
+</div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-quota" onclick="closeModalOnBg(event)">
+<div class="modal-box">
+<div class="modal-header">
+<h3><span class="modal-icon">🎫</span>令牌与配额管控 · 迭代方向</h3>
+<button class="modal-close" onclick="closeModal('quota')">×</button>
+</div>
+<div class="modal-body">
+<div class="intro">当前配额以 token 数为单位，业务方和财务看不到"实际花了多少钱"。费用维度的精细核算与管控是本能力最核心的演进方向，同时需要严格避免超扣、错扣。</div>
+<h4>主要演进路径</h4>
+<ul>
+<li><strong>费用维度的精准管控</strong>配额单位从"token 数"扩展到"金额"，按模型单价实时折算费用，业务方和财务直接看到"当月已花费 / 预算余额"。不同模型的价格差异、输入输出分别计价等复杂计费规则都可建模。</li>
+<li><strong>超扣与错扣防护</strong>围绕计费的正确性建立多重校验，确保任何场景下都不出现"扣多了"、"扣重复了"、"扣错人"的问题。关键链路支持对账、追溯、回滚机制。</li>
+<li><strong>预算管理体系</strong>支持按部门、项目、人员维度定预算，月度、季度、年度滚动核算，达到预算阈值自动告警。</li>
+<li><strong>超支保护策略</strong>超预算后可配置多种处置方式：告警提醒、自动切换到便宜模型继续服务、直接阻断，满足不同业务的容忍度。</li>
+<li><strong>用量预测与预算辅助</strong>基于历史趋势预测未来用量，辅助预算申报、提前发现异常消耗。</li>
+</ul>
+</div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-ha" onclick="closeModalOnBg(event)">
+<div class="modal-box">
+<div class="modal-header">
+<h3><span class="modal-icon">⚡</span>多渠道高可用 · 迭代方向</h3>
+<button class="modal-close" onclick="closeModal('ha')">×</button>
+</div>
+<div class="modal-body">
+<div class="no-plan">当前能力已较为完善，覆盖负载均衡、健康检查、熔断降级、能力匹配等主要场景，短期内暂无专项迭代计划。后续如有新场景需求（如跨区域容灾等）再单独规划。</div>
+</div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-protocol" onclick="closeModalOnBg(event)">
+<div class="modal-box">
+<div class="modal-header">
+<h3><span class="modal-icon">🔄</span>跨协议转换 · 迭代方向</h3>
+<button class="modal-close" onclick="closeModal('protocol')">×</button>
+</div>
+<div class="modal-body">
+<div class="intro">当前覆盖两种主流协议的常用字段，但 AI 生态迭代迅猛，新模型厂商和新协议特性的接入节奏需要持续跟进。</div>
+<h4>主要演进路径</h4>
+<ul>
+<li><strong>更多协议接入</strong>逐步扩展到 Gemini、通义、月之暗面等更多主流模型厂商的原生协议，让业务方接入新厂商不再受限于网关适配进度。</li>
+<li><strong>字段完整性对齐</strong>对照各厂商官方能力清单定期核查字段覆盖度，避免新字段漏传影响客户端功能。</li>
+<li><strong>厂商特性保留</strong>对各厂商特有的高级能力（如缓存标记、工具调用扩展、思考链控制等），在网关层能保留透传而不是被吞掉。</li>
+<li><strong>协议版本演进适配</strong>厂商协议升级时能在网关侧平滑兼容老版本客户端，避免客户端被迫升级。</li>
+</ul>
+</div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-byok" onclick="closeModalOnBg(event)">
+<div class="modal-box">
+<div class="modal-header">
+<h3><span class="modal-icon">🔑</span>BYOK 自带 Key · 迭代方向</h3>
+<button class="modal-close" onclick="closeModal('byok')">×</button>
+</div>
+<div class="modal-body">
+<div class="intro">BYOK 用户当前享受了安全过滤和审计，但用量数据未进入全局统计，公司看不到整体 AI 资源消耗。Key 的全生命周期管理也有进一步完善的空间。</div>
+<h4>主要演进路径</h4>
+<ul>
+<li><strong>用量透明化</strong>BYOK 请求的 token 消耗同样纳入日志与看板（不占用配额，但统计口径完整），公司拥有跨接入方式的全局 AI 用量视图。</li>
+<li><strong>Key 生命周期管理</strong>覆盖 Key 的录入、轮换、过期提醒、异常使用模式检测与告警、主动失效等完整生命周期。</li>
+<li><strong>BYOK 成本归因</strong>用户把厂商账单对齐到网关记录，确认"网关代理了哪些请求、产生了多少费用"，账实相符。</li>
+<li><strong>同厂商多 Key 负载均衡</strong>团队可维护多把同厂商 Key 组成池，单 Key 被限流或失效时自动切换，提升 BYOK 场景的稳定性。</li>
+</ul>
+</div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-observability" onclick="closeModalOnBg(event)">
+<div class="modal-box">
+<div class="modal-header">
+<h3><span class="modal-icon">📊</span>全链路可观测 · 迭代方向</h3>
+<button class="modal-close" onclick="closeModal('observability')">×</button>
+</div>
+<div class="modal-body">
+<div class="intro">当前指标覆盖了请求维度和渠道维度，但随着网关能力丰富，还需要补全更多细分指标，特别是围绕缓存、成本、用户体感的维度，支撑运营决策数据化。</div>
+<h4>主要演进路径</h4>
+<ul>
+<li><strong>缓存相关指标</strong>随着请求缓存能力上线，需要补全缓存命中率、缓存覆盖请求量、缓存降本效果（省下的 token 和金额）等核心指标，让缓存价值可量化。</li>
+<li><strong>用户体感指标</strong>独立监控首字延迟、流式吐字速度等用户实际感知的指标，区分"整体耗时慢"和"首字慢"两种不同的体验问题。</li>
+<li><strong>成本细分指标</strong>按模型、场景、部门、项目多维度拆解消耗与费用，支撑细粒度的成本分析和归因。</li>
+<li><strong>变更观测</strong>新路由策略、新 Skill、新敏感词规则上线后自动对比上线前后的核心指标，数据驱动验证变更效果。</li>
+<li><strong>流量回放</strong>脱敏后的生产流量可在预发环境回放，用来验证新策略不引入回归，降低上线风险。</li>
+<li><strong>合规审计增强</strong>审计日志支持完整性证明和长周期归档，满足等保、金融等强监管行业的合规留痕要求。</li>
+<li><strong>问题分钟级定位</strong>请求失败或变慢时，一键拉出该请求的完整决策链路（命中了哪些 Skill、路由到了哪个模型、哪一步耗时长）。</li>
+</ul>
+</div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-tenant" onclick="closeModalOnBg(event)">
+<div class="modal-box">
+<div class="modal-header">
+<h3><span class="modal-icon">🏢</span>渠道模式 · 迭代方向</h3>
+<button class="modal-close" onclick="closeModal('tenant')">×</button>
+</div>
+<div class="modal-body">
+<div class="no-plan">当前已实现上游供应商隔离，覆盖核心的多租户隔离需求。短期内暂无专项迭代计划。后续如承载更多独立业务方时，会按需补齐租户级 SLA、租户级账单等运营层能力。</div>
+</div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-cache" onclick="closeModalOnBg(event)">
+<div class="modal-box">
+<div class="modal-header">
+<h3><span class="modal-icon">💾</span>请求缓存 · 规划方向</h3>
+<button class="modal-close" onclick="closeModal('cache')">×</button>
+</div>
+<div class="modal-body">
+<div class="intro">相同或近似的请求没必要每次都打到大模型。网关层构建请求缓存体系，命中缓存时直接返回历史响应，兼顾降本和提速。</div>
+<h4>主要规划路径</h4>
+<ul>
+<li><strong>精准缓存</strong>完全相同的请求（相同的模型、相同的上下文、相同的参数）直接复用历史响应，适合固定问答、结构化分类等重复度高的场景。</li>
+<li><strong>语义缓存</strong>含义相同但表达不同的请求（近似问法）通过语义匹配命中缓存，覆盖更多真实业务中"换种说法问相同问题"的情况。</li>
+<li><strong>命中策略可控</strong>缓存启用粒度可按模型、场景、用户等维度精细配置，避免在需要最新响应的场景（如实时数据查询）误用缓存。</li>
+<li><strong>缓存有效期管理</strong>针对不同内容类型设置合理的有效期，确保缓存内容的时效性与准确性。</li>
+<li><strong>命中效果可观测</strong>配合可观测能力提供命中率、节省调用次数、节省费用等核心指标，让缓存的业务价值完全透明。</li>
+</ul>
+</div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-memory" onclick="closeModalOnBg(event)">
+<div class="modal-box">
+<div class="modal-header">
+<h3><span class="modal-icon">🧬</span>记忆工程与 Skill 自进化 · 规划方向</h3>
+<button class="modal-close" onclick="closeModal('memory')">×</button>
+</div>
+<div class="modal-body">
+<div class="intro">网关天然是所有请求和响应的唯一穿透点，是做长期记忆最适合的位置。以"沉淀 → 反思 → 进化"三层架构，把用户使用过程中自然产生的信息转化为可复用的资产，让 Skill 库从人工维护迈向自我进化。</div>
+<h4>主要规划路径</h4>
+<ul>
+<li><strong>基础记忆沉淀</strong>在网关侧构建用户级长期记忆，自动提取并结构化存储个人偏好（代码风格、语言习惯、常用框架）、业务背景（所在部门、负责项目、常用术语）、历史行为（常问问题、反复遇到的坑），形成随调随用的个人画像。</li>
+<li><strong>周期性反思与归因</strong>按日 / 周 / 月节奏对用户的会话进行摘要与归因：哪些任务重复出现、哪些套路反复奏效、哪些提问模式效果差。反思结果本身也进入记忆库，作为后续决策依据。</li>
+<li><strong>候选 Skill 自动孵化</strong>从反思结果中自动识别出高频且高价值的片段（例如某人反复解释同一个业务术语、反复走同一个代码套路），生成候选 Skill，经效果验证后晋级为正式 Skill，完成"经验 → 可复用资产"的闭环。</li>
+<li><strong>已有 Skill 数据驱动演进</strong>现有 Skill 库结合使用数据自动精修（命中率低的措辞调优）、合并（相似 Skill 去重）、淘汰（长期低效的自动下线），摆脱靠人工维护才能保持鲜活的困境。</li>
+<li><strong>三层记忆分治</strong>公司级（统一规范与制度）、岗位级（角色通用经验）、个人级（独有偏好），分层存储、分层生效，匹配时按优先级叠加，既保护个性又复用共性。</li>
+<li><strong>组织级泛化与知识流转</strong>个人记忆经脱敏后，可沉淀为同岗位、同部门的共性经验，一个人踩过的坑变成一个团队的默认知识，显著降低新人上手成本。</li>
+<li><strong>隐私与合规底线</strong>记忆存储全程受用户控制——支持查看、导出、删除、暂停记忆；敏感内容（身份信息、密钥、代码机密）进入记忆前强制脱敏；BYOK 用户可独立选择是否启用记忆功能。</li>
+</ul>
+</div>
+</div>
+</div>
+
+<script>
+function switchTab(evt,name){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+  evt.currentTarget.classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+  window.scrollTo({top:document.querySelector('.tab-nav').offsetTop-20,behavior:'smooth'});
+}
+function openModal(id){
+  document.getElementById('modal-'+id).classList.add('active');
+  document.body.style.overflow='hidden';
+}
+function closeModal(id){
+  document.getElementById('modal-'+id).classList.remove('active');
+  document.body.style.overflow='';
+}
+function closeModalOnBg(evt){
+  if(evt.target.classList.contains('modal-overlay')){
+    evt.target.classList.remove('active');
+    document.body.style.overflow='';
+  }
+}
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'){
+    document.querySelectorAll('.modal-overlay.active').forEach(m=>m.classList.remove('active'));
+    document.body.style.overflow='';
+  }
+});
+</script>
+
+</body>
+</html>
